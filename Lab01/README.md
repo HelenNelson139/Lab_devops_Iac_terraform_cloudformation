@@ -1,132 +1,236 @@
-# NT548 - Bai Tap Thuc Hanh 01
-
-Bo ma nguon nay trien khai ha tang AWS bang Terraform va CloudFormation:
-
-- VPC co public subnet va private subnet.
-- Internet Gateway cho public subnet.
-- NAT Gateway cho private subnet truy cap Internet theo chieu outbound.
-- Route table rieng cho public/private subnet.
-- Default Security Group cua VPC duoc quan ly va khoa rule mac dinh.
-- EC2 public va private.
-- Security Group cho public EC2 chi cho SSH tu CIDR duoc cau hinh.
-- Security Group cho private EC2 chi cho SSH tu public EC2 Security Group.
-- Test cases tinh de kiem tra cau truc va cac tai nguyen bat buoc.
-
-## Cau Truc
-
-```text
-.
-├── cloudformation/
-│   ├── parameters.example.json
-│   ├── root.yaml
-│   └── modules/
-│       ├── compute.yaml
-│       ├── network.yaml
-│       └── security.yaml
-├── terraform/
-│   ├── main.tf
-│   ├── outputs.tf
-│   ├── provider.tf
-│   ├── terraform.tfvars.example
-│   ├── variables.tf
-│   ├── versions.tf
-│   └── modules/
-│       ├── compute/
-│       ├── network/
-│       └── security/
-└── tests/
-    └── test_iac_static.py
-```
-
-## Dieu Kien
-
-- AWS CLI da cau hinh credentials hop le.
-- Terraform >= 1.6 neu chay phan Terraform.
-- Python >= 3.10 de chay tests.
-- Mot EC2 key pair da ton tai trong AWS Region su dung.
-
-Nen dat `allowed_ssh_cidr` thanh IP public cua nguoi dung theo dang `/32`, vi du `203.0.113.10/32`.
-
-## Chay Bang Terraform
-
+﻿# Devops - Terraform và CloudFormation để quản lý và triển khai hạ tầng AWS
+Hướng dẫn chạy mã nguồn Terraform và CloudFormation để triển khai hạ tầng AWS cho bài thực hành 01.
+## Điều Kiện Và Cách Chuẩn Bị
+### 1. AWS CLI
+Kiểm tra AWS CLI:
 ```powershell
-cd terraform
+aws --version
+```
+Nếu chưa có, cài bằng:
+```powershell
+winget install Amazon.AWSCLI
+```
+Nếu cài xong nhưng PowerShell chưa nhận lệnh `aws`, đóng PowerShell và mở lại. Nếu vẫn chưa nhận, thêm AWS CLI vào `PATH` tạm thời:
+```powershell
+$env:Path += ";C:\Program Files\Amazon\AWSCLIV2"
+aws --version
+```
+### 2. AWS Credentials
+Nếu dùng AWS Academy/VocLabs, vào `Cloud Access`, bấm `Show` ở mục `AWS CLI`, rồi copy block có dạng:
+```ini
+[default]
+aws_access_key_id=...
+aws_secret_access_key=...
+aws_session_token=...
+```
+Tạo thư mục `.aws` và lưu credentials:
+```powershell
+New-Item -ItemType Directory -Force $env:USERPROFILE\.aws
+notepad "$env:USERPROFILE\.aws\credentials"
+```
+Dán block credentials vào file trên, sau đó lưu lại. Tiếp theo tạo file cấu hình region:
+```powershell
+notepad "$env:USERPROFILE\.aws\config"
+```
+Dán nội dung sau, thay `us-east-1` bằng region đang dùng nếu khác:
+```ini
+[default]
+region=us-east-1
+output=json
+```
+Kiểm tra credentials:
+```powershell
+aws sts get-caller-identity
+```
+### 3. Terraform
+Kiểm tra Terraform:
+```powershell
+terraform version
+```
+Nếu chưa có, cài bằng:
+```powershell
+winget install Hashicorp.Terraform
+```
+Đóng PowerShell, mở lại, rồi kiểm tra lại:
+```powershell
+terraform version
+```
+### 4. EC2 Key Pair
+Trong AWS Console, chọn đúng region sẽ deploy, sau đó vào:
+```text
+EC2 -> Key pairs -> Create key pair
+```
+Tạo key pair với thông tin ví dụ:
+```text
+Name: devops-lab-key
+Key pair type: RSA
+Private key file format: .pem
+```
+Lưu file `.pem` ở một thư mục riêng. Nếu lưu file `.pem` ở đường dẫn khác, chỉ cần thay đường dẫn trong các lệnh SSH/SCP bên dưới. Terraform không cần đường dẫn file `.pem`; Terraform chỉ cần tên key pair trong `terraform/terraform.tfvars`:
+```hcl
+key_name = "devops-lab-key"
+```
+Nếu dùng tên key pair khác, sửa lại `key_name` cho khớp.
+
+## Cấu Hình Terraform
+Tạo file cấu hình từ file mẫu:
+```powershell
+cd <duong-dan-repo>\terraform
 Copy-Item terraform.tfvars.example terraform.tfvars
 ```
+Mở `terraform.tfvars` và cập nhật các giá trị cần thiết:
 
-Cap nhat cac gia tri trong `terraform.tfvars`, dac biet:
-
-- `aws_region`
-- `availability_zone`
-- `allowed_ssh_cidr`
-- `key_name`
-
-Sau do chay:
-
+```hcl
+project_name        = "devops-lab01"
+environment         = "lab"
+aws_region          = "us-east-1"
+availability_zone   = "us-east-1a"
+vpc_cidr            = "10.10.0.0/16"
+public_subnet_cidr  = "10.10.1.0/24"
+private_subnet_cidr = "10.10.2.0/24"
+allowed_ssh_cidr    = "<cidr-duoc-phep-ssh>"
+key_name            = "<ten-key-pair>"
+instance_type       = "t3.micro"
+```
+Chỗ `allowed_ssh_cidr`:
 ```powershell
+curl.exe https://checkip.amazonaws.com
+```
+Nếu IP public là `x.x.x.x`, có thể đặt:
+```hcl
+allowed_ssh_cidr = "x.x.x.x/32"
+```
+## Chạy Terraform
+```powershell
+cd <duong-dan-repo>\terraform
 terraform init
-terraform fmt -recursive
-terraform validate
 terraform plan
 terraform apply
 ```
-
-Xoa ha tang:
-
+Khi Terraform hỏi xác nhận, nhập:
+```text
+yes
+```
+Lấy output:
+```powershell
+terraform output
+```
+SSH vào Public EC2:
+```powershell
+ssh -i <duong-dan-file-pem> ec2-user@<public_instance_public_ip>
+```
+Copy private key lên Public EC2:
+```powershell
+scp -i <duong-dan-file-pem> <duong-dan-file-pem> ec2-user@<public_instance_public_ip>:/home/ec2-user/devops-lab-key.pem
+```
+Từ Public EC2, SSH vào Private EC2:
+```bash
+chmod 400 devops-lab-key.pem
+ssh -i devops-lab-key.pem ec2-user@<private_instance_private_ip>
+```
+Xóa hạ tầng Terraform sau khi demo xong:
 ```powershell
 terraform destroy
 ```
-
-## Chay Bang CloudFormation
-
-Cap nhat cac tham so deploy, dac biet `AllowedSshCidr` va `KeyName`. File `cloudformation/parameters.example.json` duoc de san neu muon dung voi `create-stack` hoac luu cau hinh nop bai.
-
-Vi root stack dung nested stacks, can package cac template con len S3 truoc khi deploy:
-
+## Chạy Test Sau Khi Triển Khai
+Các test này chạy sau khi đã `terraform apply` hoặc deploy CloudFormation thành công. Test dùng AWS CLI để kiểm tra tài nguyên thật trên AWS.
+Chạy test cho hạ tầng triển khai bằng Terraform:
 ```powershell
-cd cloudformation
-aws s3 mb s3://<bucket-artifact-cua-ban>
+cd <duong-dan-repo>
+python -B -m unittest discover -s tests -v
+```
+Chạy test cho hạ tầng triển khai bằng CloudFormation:
+```powershell
+cd <duong-dan-repo>
+$env:IAC_SOURCE="cloudformation"
+$env:STACK_NAME="devops-lab01"
+python -B -m unittest discover -s tests -v
+```
+Các test kiểm tra:
+- VPC tồn tại và bật DNS.
+- Public/private subnet đúng CIDR và cấu hình public IP.
+- Public route table đi qua Internet Gateway.
+- Private route table đi qua NAT Gateway.
+- Security Group public chỉ mở SSH theo CIDR cấu hình.
+- Security Group private chỉ mở SSH từ Security Group của Public EC2.
+- Public EC2 có public IP và đang running.
+- Private EC2 không có public IP và đang running.
+## Chạy CloudFormation
+Trước khi chạy CloudFormation, nên xóa hạ tầng Terraform nếu đã triển khai trước đó để tránh tạo trùng tài nguyên:
+```powershell
+cd <duong-dan-repo>\terraform
+terraform destroy
+```
+Sau đó chuyển sang thư mục CloudFormation:
+```powershell
+cd <duong-dan-repo>\cloudformation
+```
+Package nested stacks lên S3. Tên bucket phải là duy nhất trên toàn AWS:
+```powershell
+aws s3 mb s3://<bucket-artifact-cua-ban> --region us-east-1
 aws cloudformation package `
   --template-file root.yaml `
   --s3-bucket <bucket-artifact-cua-ban> `
-  --output-template-file packaged.yaml
-
+  --output-template-file packaged.yaml `
+  --region us-east-1
+```
+### Cách 1: Truyền tham số trực tiếp trong lệnh deploy
+Thay `<cidr-duoc-phep-ssh>` và `<ten-key-pair>` theo môi trường của bạn.
+```powershell
 aws cloudformation deploy `
   --template-file packaged.yaml `
-  --stack-name nt548-lab01 `
+  --stack-name devops-lab01 `
   --parameter-overrides `
-    ProjectName=nt548-lab01 `
+    ProjectName=devops-lab01 `
     Environment=lab `
     VpcCidr=10.10.0.0/16 `
     PublicSubnetCidr=10.10.1.0/24 `
     PrivateSubnetCidr=10.10.2.0/24 `
-    AvailabilityZone=ap-southeast-1a `
-    AllowedSshCidr=203.0.113.10/32 `
-    KeyName=your-existing-key-pair `
-    InstanceType=t3.micro
+    AvailabilityZone=us-east-1a `
+    AllowedSshCidr=<cidr-duoc-phep-ssh> `
+    KeyName=<ten-key-pair> `
+    InstanceType=t3.micro `
+  --capabilities CAPABILITY_AUTO_EXPAND CAPABILITY_NAMED_IAM `
+  --region us-east-1
 ```
-
-Xoa stack:
-
+### Cách 2: Sửa tham số trong file JSON
+Tạo file parameter chạy thật từ file mẫu:
 ```powershell
-aws cloudformation delete-stack --stack-name nt548-lab01
+Copy-Item parameters.example.json parameters.json
 ```
-
-## Chay Test Cases
-
-Tests khong tao tai nguyen AWS. Muc tieu la kiem tra nhanh cac thanh phan bat buoc co trong source code.
-
+Mở `parameters.json` và sửa các giá trị cần thiết, đặc biệt là:
+```text
+AllowedSshCidr
+KeyName
+AvailabilityZone
+```
+Chuyển file JSON thành parameter overrides:
 ```powershell
-python -m unittest discover -s tests -v
+$parameterFile = Get-Content .\parameters.json | ConvertFrom-Json
+$params = foreach ($parameter in $parameterFile) {
+  "$($parameter.ParameterKey)=$($parameter.ParameterValue)"
+}
 ```
-
-## Bao Cao
-
-Mau bao cao nam tai `reports/BaoCaoThucHanh01.md`. Co the dien ket qua trien khai va chuyen sang Word theo mau cua mon hoc.
-
-## Ghi Chu Bao Mat
-
-- Default Security Group cua VPC duoc quan ly voi rule rong de tranh mo truy cap ngoai y muon.
-- Public EC2 chi mo SSH tu `allowed_ssh_cidr`/`AllowedSshCidr`.
-- Private EC2 khong co public IP va chi nhan SSH tu Security Group cua public EC2.
-- Private subnet di Internet qua NAT Gateway, khong route truc tiep qua Internet Gateway.
+Deploy stack:
+```powershell
+aws cloudformation deploy `
+  --template-file packaged.yaml `
+  --stack-name devops-lab01 `
+  --parameter-overrides $params `
+  --capabilities CAPABILITY_AUTO_EXPAND CAPABILITY_NAMED_IAM `
+  --region us-east-1
+```
+Xem output sau khi deploy:
+```powershell
+aws cloudformation describe-stacks `
+  --stack-name devops-lab01 `
+  --query "Stacks[0].Outputs" `
+  --output table `
+  --region us-east-1
+```
+Xóa CloudFormation stack:
+```powershell
+aws cloudformation delete-stack `
+  --stack-name devops-lab01 `
+  --region us-east-1
+```
