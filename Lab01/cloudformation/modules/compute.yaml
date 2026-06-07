@@ -49,6 +49,30 @@ Resources:
         - Key: ManagedBy
           Value: cloudformation
 
+  PublicInstanceEip:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value:
+            Fn::Sub: ${ProjectName}-public-ec2-eip
+        - Key: Environment
+          Value:
+            Ref: Environment
+        - Key: ManagedBy
+          Value: cloudformation
+
+  PublicInstanceEipAssociation:
+    Type: AWS::EC2::EIPAssociation
+    Properties:
+      AllocationId:
+        Fn::GetAtt:
+          - PublicInstanceEip
+          - AllocationId
+      InstanceId:
+        Ref: PublicInstance
+
   PrivateInstance:
     Type: AWS::EC2::Instance
     Properties:
@@ -81,11 +105,9 @@ Outputs:
     Value:
       Ref: PublicInstance
   PublicInstancePublicIp:
-    Description: Public EC2 public IP.
+    Description: Elastic IP of the public EC2 instance.
     Value:
-      Fn::GetAtt:
-        - PublicInstance
-        - PublicIp
+      Ref: PublicInstanceEip
   PrivateInstanceId:
     Description: Private EC2 instance ID.
     Value:

@@ -4,7 +4,7 @@ Description: NT548 Lab01 root stack for modular AWS infrastructure.
 Parameters:
   ProjectName:
     Type: String
-    Default: nt548-lab01
+    Default: devops-lab01
   Environment:
     Type: String
     Default: lab

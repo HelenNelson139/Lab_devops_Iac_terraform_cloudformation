@@ -1,7 +1,7 @@
 variable "project_name" {
   description = "Project name used for resource naming."
   type        = string
-  default     = "nt548-lab01"
+  default     = "devops-lab01"
 }
 
 variable "environment" {
@@ -13,13 +13,13 @@ variable "environment" {
 variable "aws_region" {
   description = "AWS region."
   type        = string
-  default     = "ap-southeast-1"
+  default     = "us-east-1"
 }
 
 variable "availability_zone" {
   description = "Availability zone for the lab subnets."
   type        = string
-  default     = "ap-southeast-1a"
+  default     = "us-east-1a"
 }
 
 variable "vpc_cidr" {

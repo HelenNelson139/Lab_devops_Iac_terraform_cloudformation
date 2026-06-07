@@ -38,3 +38,26 @@ resource "aws_instance" "private" {
     Name = "${var.project_name}-private-ec2"
   }
 }
+resource "aws_ec2_instance_state" "public" {
+  instance_id = aws_instance.public.id
+  state       = "running"
+}
+
+resource "aws_ec2_instance_state" "private" {
+  instance_id = aws_instance.private.id
+  state       = "running"
+}
+resource "aws_eip" "public" {
+  domain = "vpc"
+
+  tags = {
+    Name = "${var.project_name}-public-ec2-eip"
+  }
+}
+
+resource "aws_eip_association" "public" {
+  allocation_id = aws_eip.public.id
+  instance_id   = aws_instance.public.id
+
+  depends_on = [aws_ec2_instance_state.public]
+}

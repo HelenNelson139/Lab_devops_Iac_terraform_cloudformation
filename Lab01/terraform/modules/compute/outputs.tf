@@ -5,7 +5,7 @@ output "public_instance_id" {
 
 output "public_instance_public_ip" {
   description = "Public EC2 public IP."
-  value       = aws_instance.public.public_ip
+  value       = aws_eip.public.public_ip
 }
 
 output "private_instance_id" {
